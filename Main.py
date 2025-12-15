@@ -4,21 +4,30 @@ import math
 
 pygame.init()
 
-FPS = 60 #Framerate
+#Framerate
+FPS = 60
 
 #Gamescreen
 WIDTH, HEIGHT = 800,800
+
 #tile and grid
 ROWS = 4
 COLUMS = 4
 RECT_HEIGHT = HEIGHT // ROWS
 RECT_WIDTH = WIDTH // COLUMS
+
 #Outline
 OUTLINE_COLOR = (187,173,160)
 OUTLINE_THICKNESS = 10
+
 #Background
 BACKGROUND_COLOR = (205,192,180)
 FONT_COLOR =  (119,110,101)
+
+# Button Colors
+BUTTON_COLOR = (143, 122, 102)
+BUTTON_HOVER_COLOR = (180, 150, 120)
+BUTTON_TEXT_COLOR = (255, 255, 255)
 
 #Move numbers
 FONT = pygame.font.SysFont("comicsansms",60,bold=True)
@@ -79,6 +88,77 @@ class Tile:
         self.x += delta[0]
         self.y += delta[1]
             
+#Win and lost condition
+def end_move(tiles):
+    #Win condition
+    for tile in tiles.values():
+        if tile.value >= 2048:
+            return "win"
+        
+    #Lost condition
+    if not empty_spaces(tiles) and not can_merge(tiles):
+        return "lost"
+    
+    row, col = get_random_pos(tiles)
+    tiles[f"{row}{col}"] = Tile(random.choice([2, 4]), row, col)
+    return "continue"
+
+#Empty spaces check
+def empty_spaces(tiles):
+    return len(tiles) < ROWS * COLUMS
+
+#Merge Check
+def can_merge(tiles):
+    #Check if tiles can merge
+    for row in range(ROWS):
+        for col in range(COLUMS):
+            key = f"{row}{col}"
+            tile = tiles.get(key)
+            if not tile:
+                continue
+
+            #Right check
+            right_tile = tiles.get(f"{row}{col + 1}")
+            if right_tile and tile.value == right_tile.value:
+                return True
+            
+            #Down check
+            down_tile = tiles.get(f"{row + 1}{col}")
+            if down_tile and tile.value == down_tile.value:
+                return True
+            
+#Draw message and button
+def draw_message(window,message,button_rect):
+    #Back ground foe message
+    overlay = pygame.Surface((WIDTH,HEIGHT),pygame.SRCALPHA)
+    overlay.fill((0,0,0,150))
+    window.blit(overlay,(0,0))
+    
+    #Show message
+    GAME_FONT = pygame.font.SysFont("comicsansms", 80 , bold=True)
+    text = GAME_FONT.render(message,1,BUTTON_TEXT_COLOR)
+
+    #Center alignment
+    text_x = WIDTH/2 - text.get_width()/2
+    text_y = HEIGHT/2 - text.get_height()/ 2 -50
+
+    window.blit(text,(text_x,text_y))
+
+    #Show button
+    mouse_pos = pygame.mouse.get_pos()
+    #Hover
+    color = BUTTON_HOVER_COLOR if button_rect.collidepoint(mouse_pos) else BUTTON_COLOR
+    #Draw button
+    pygame.draw.rect(window,color,button_rect,0,10)
+    #Show text button
+    BUTTON_FONT = pygame.font.SysFont("comicsansms",40,bold=True)
+    button_text = BUTTON_FONT.render("Play Again",1,BUTTON_TEXT_COLOR)
+    #Center alignment
+    button_text_x = button_rect.x + (button_rect.width/2 - button_text.get_width()/2)
+    button_text_y = button_rect.y + (button_rect.height/2 - button_text.get_height()/2)
+    window.blit(button_text, (button_text_x , button_text_y))
+
+    pygame.display.update()
 
 #Draw grid
 def draw_grid(window):
@@ -122,95 +202,99 @@ def get_random_pos(tiles):
 
 #Moving tiles
 def move_tiles(window,tiles,clock,direction):
-        updated = True
-        blocks = set()
+    updated = True
+    blocks = set()
 
-        #Moving Left
-        if direction == "left":
-            sort_func = lambda x: x.col
-            reverse = False
-            delta = (-MOVE_VEL,0)
-            boundary_check =  lambda tile: tile.col == 0
-            get_next_tile = lambda tile: tiles.get(f"{tile.row}{tile.col - 1}")
-            merge_check = lambda tile, next_tile: tile.x > next_tile.x + MOVE_VEL
-            move_check = (
-                lambda tile , next_tile: tile.x > next_tile.x + RECT_WIDTH + MOVE_VEL
-            )
-            ceil = True
+    #Moving Left
+    if direction == "left":
+        sort_func = lambda x: x.col
+        reverse = False
+        delta = (-MOVE_VEL,0)
+        boundary_check =  lambda tile: tile.col == 0
+        get_next_tile = lambda tile: tiles.get(f"{tile.row}{tile.col - 1}")
+        merge_check = lambda tile, next_tile: tile.x > next_tile.x + MOVE_VEL
+        move_check = (
+            lambda tile , next_tile: tile.x > next_tile.x + RECT_WIDTH + MOVE_VEL
+        )
+        ceil = True
 
-        #Moving Right
-        elif direction == "right":
-            sort_func = lambda x: x.col
-            reverse = True
-            delta = (MOVE_VEL,0)
-            boundary_check =  lambda tile: tile.col == COLUMS-1
-            get_next_tile = lambda tile: tiles.get(f"{tile.row}{tile.col + 1}")
-            merge_check = lambda tile, next_tile: tile.x < next_tile.x - MOVE_VEL
-            move_check = (
-                lambda tile , next_tile: tile.x + RECT_WIDTH + MOVE_VEL < next_tile.x
-            )
-            ceil = False
+    #Moving Right
+    elif direction == "right":
+        sort_func = lambda x: x.col
+        reverse = True
+        delta = (MOVE_VEL,0)
+        boundary_check =  lambda tile: tile.col == COLUMS-1
+        get_next_tile = lambda tile: tiles.get(f"{tile.row}{tile.col + 1}")
+        merge_check = lambda tile, next_tile: tile.x < next_tile.x - MOVE_VEL
+        move_check = (
+            lambda tile , next_tile: tile.x + RECT_WIDTH + MOVE_VEL < next_tile.x
+        )
+        ceil = False
 
-        #Moving up
-        elif direction == "up":
-            sort_func = lambda x: x.row
-            reverse = False
-            delta = (0,-MOVE_VEL)
-            boundary_check =  lambda tile: tile.row == 0
-            get_next_tile = lambda tile: tiles.get(f"{tile.row - 1}{tile.col}")
-            merge_check = lambda tile, next_tile: tile.y > next_tile.y + MOVE_VEL
-            move_check = (
-                lambda tile , next_tile: tile.y > next_tile.y + RECT_HEIGHT + MOVE_VEL
-            )
-            ceil = True
+    #Moving up
+    elif direction == "up":
+        sort_func = lambda x: x.row
+        reverse = False
+        delta = (0,-MOVE_VEL)
+        boundary_check =  lambda tile: tile.row == 0
+        get_next_tile = lambda tile: tiles.get(f"{tile.row - 1}{tile.col}")
+        merge_check = lambda tile, next_tile: tile.y > next_tile.y + MOVE_VEL
+        move_check = (
+            lambda tile , next_tile: tile.y > next_tile.y + RECT_HEIGHT + MOVE_VEL
+        )
+        ceil = True
 
-        #Moving Down
-        elif direction == "down":
-            sort_func = lambda x: x.row
-            reverse = True
-            delta = (0,MOVE_VEL)
-            boundary_check =  lambda tile: tile.row == ROWS -1
-            get_next_tile = lambda tile: tiles.get(f"{tile.row + 1}{tile.col}")
-            merge_check = lambda tile, next_tile: tile.y < next_tile.y - MOVE_VEL
-            move_check = (
-                lambda tile , next_tile: tile.y + RECT_HEIGHT + MOVE_VEL < next_tile.y
-            )
-            ceil = False
+    #Moving Down
+    elif direction == "down":
+        sort_func = lambda x: x.row
+        reverse = True
+        delta = (0,MOVE_VEL)
+        boundary_check =  lambda tile: tile.row == ROWS -1
+        get_next_tile = lambda tile: tiles.get(f"{tile.row + 1}{tile.col}")
+        merge_check = lambda tile, next_tile: tile.y < next_tile.y - MOVE_VEL
+        move_check = (
+            lambda tile , next_tile: tile.y + RECT_HEIGHT + MOVE_VEL < next_tile.y
+        )
+        ceil = False
 
-        while updated:
-            clock.tick(FPS)
-            updated = False
-            sorted_tiles = sorted(tiles.values(), key=sort_func, reverse=reverse)
+    while updated:
+        clock.tick(FPS)
+        updated = False
+        #blocks = set()
+        sorted_tiles = sorted(tiles.values(), key=sort_func, reverse=reverse)
 
-            for i, tile in enumerate(sorted_tiles):
-                if boundary_check(tile):
-                    continue
+        for i, tile in enumerate(sorted_tiles):
+            if boundary_check(tile):
+                continue
 
-                next_tile = get_next_tile(tile)
-                if not next_tile:
-                    tile.move(delta)
-                elif (
-                    tile.value == next_tile.value
-                    and tile not in blocks
-                    and next_tile not in blocks
-                ):
-                    if merge_check(tile, next_tile):
-                        tile.move(delta)
-                    else:
-                        next_tile.value *= 2
-                        sorted_tiles.pop(i)
-                        blocks.add(next_tile)
-                elif move_check(tile, next_tile):
+            next_tile = get_next_tile(tile)
+            if not next_tile:
+                tile.move(delta)
+            elif (
+                tile.value == next_tile.value
+                and tile not in blocks
+                and next_tile not in blocks
+            ):
+                if merge_check(tile, next_tile):
                     tile.move(delta)
                 else:
-                    continue
+                    next_tile.value *= 2
+                    #tile.value = 0
+                    sorted_tiles.pop(i)
+                    blocks.add(next_tile)
+                    updated = True
+                        
+            elif move_check(tile, next_tile):
+                tile.move(delta)
+            else:
+                continue
 
-                tile.set_pos(ceil)
-                updated = True
+            tile.set_pos(ceil)
+            updated = True
 
-            update_tiles(window,tiles,sorted_tiles)
+        update_tiles(window,tiles,sorted_tiles)
 
-        return end_move(tiles)
+    return end_move(tiles)
 
 def end_move(tiles):
     if len(tiles) == 16:
@@ -224,7 +308,8 @@ def end_move(tiles):
 def update_tiles(window,tiles,sorted_tiles):
     tiles.clear()
     for tile in sorted_tiles:
-        tiles[f"{tile.row}{tile.col}"] = tile
+        if tile.value > 0:
+            tiles[f"{tile.row}{tile.col}"] = tile
 
     draw(window,tiles)
 
@@ -243,6 +328,13 @@ def main(window):
     run = True
 
     tiles = generate_tiles()
+    game_state = "running"
+
+    #Button's size and position
+    BUTTON_WIDTH , BUTTON_HEIGHT = 200,60
+    BUTTON_X = WIDTH / 2 - BUTTON_WIDTH / 2
+    BUTTON_Y = HEIGHT / 2 + 150
+    restart_button_rect = pygame.Rect(BUTTON_X,BUTTON_Y,BUTTON_WIDTH,BUTTON_HEIGHT)  
     
     #Main loop
     while run:
@@ -253,21 +345,44 @@ def main(window):
                 run = False
                 break
 
-            if event.type == pygame.KEYDOWN:
-                #Left arrow
-                if event.key == pygame.K_LEFT:
-                    move_tiles(window,tiles,clock,"left")
-                #Right arrow
-                if event.key == pygame.K_RIGHT:
-                    move_tiles(window,tiles,clock,"right")
-                #Up arrow
-                if event.key == pygame.K_UP:
-                    move_tiles(window,tiles,clock,"up")
-                #Down arrow
-                if event.key == pygame.K_DOWN:
-                    move_tiles(window,tiles,clock,"down")
+            #Restart Button
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if game_state != "running" and restart_button_rect.collidepoint(event.pos):
+                    tiles = generate_tiles()
+                    game_state = "running"
+                    continue
+                
+            #Game state "runnig"
+            if game_state == "running":
+                if event.type == pygame.KEYDOWN: #Key press
+                    direction = None
 
+                    #Left arrow
+                    if event.key == pygame.K_LEFT:
+                        direction = "left"
+                    #Righr arrow
+                    elif event.key == pygame.K_RIGHT:
+                        direction = "right"
+                    #Up arrow
+                    elif event.key == pygame.K_UP:
+                        direction = "up"
+                    #Down arrow
+                    elif event.key == pygame.K_DOWN:
+                        direction = "down"
+
+                    if direction:
+                        result = move_tiles(window,tiles,clock,direction)
+
+                        if result in ["lost","win"]:
+                            game_state = result
+            
         draw(window,tiles)
+
+        # "Game over / You win" Screen
+        if game_state != "running":
+            message = "Game Over" if game_state == "lost" else "You Win"
+            draw_message(window,message,restart_button_rect)
+
     pygame.quit()
 
 if __name__ == "__main__":
